@@ -136,8 +136,20 @@ Verifique se `WEBHOOK_URL` esta configurado corretamente com HTTPS.
 
 ```
 n8n-deploy/
-├── docker-compose.yml    # Orquestracao dos containers
-├── .env.example          # Template de variaveis
-├── .gitignore           # Arquivos ignorados
-└── README.md            # Documentacao
+├── docker-compose.yml          # Stack completa (teste local)
+├── docker-compose.coolify.yml  # Otimizado para Coolify (producao)
+├── docker-compose.simple.yml   # Versao sem workers
+├── .env.example                # Template de variaveis
+├── .gitignore                  # Arquivos ignorados
+└── README.md                   # Documentacao
 ```
+
+## Qual docker-compose usar?
+
+| Arquivo | Uso |
+|---------|-----|
+| `docker-compose.yml` | Teste local com porta exposta |
+| `docker-compose.coolify.yml` | **Producao no Coolify** (recomendado) |
+| `docker-compose.simple.yml` | VPS pequenas sem workers |
+
+No Coolify, selecione `docker-compose.coolify.yml` como arquivo de configuracao.
