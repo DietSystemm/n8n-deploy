@@ -122,7 +122,7 @@
             {
               "id": "content-type",
               "name": "message.content_type",
-              "value": "={{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.extendedTextMessage ? 'text' : '' }}{{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.conversation ? 'text' : '' }}",
+              "value": "={{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.audioMessage?.base64 ? 'audio' : (($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.extendedTextMessage ? 'text' : (($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.conversation ? 'text' : 'unknown')) }}",
               "type": "string"
             },
             {
@@ -257,7 +257,7 @@
       "parameters": {
         "operation": "push",
         "list": "=buffer:{{ $('Dados').item.json.Telefone }}",
-        "messageData": "={{ $('Dados').item.json.message.content }}",
+        "messageData": "={{ $('Dados').item.json.message.content_type === 'audio' ? $('Preparar Transcricao').item.json.message.content : $('Dados').item.json.message.content }}",
         "tail": true
       },
       "id": "redis-memory",
@@ -458,7 +458,8 @@
         "sessionIdType": "customKey",
         "sessionKey": "=chat:{{ $('Dados').first().json.Telefone }}",
         "contextWindowLength": 50,
-        "sessionTimeToLive": 3600
+        "sessionTimeToLive": 3600,
+        "inputKey": "mensagem_completa"
       },
       "id": "redis-chat-memory-valentina",
       "name": "Redis Chat Memory",
@@ -745,6 +746,167 @@
     },
     {
       "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Dados').item.json.message.content_type }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Dados').item.json.message.content_type }}",
+                    "rightValue": "audio",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "audio"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "tipo-mensagem-switch",
+      "name": "Tipo de Mensagem?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').item.json.config.backendApiUrl }}/audio-transcriptions/transcribe-base64",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ audioBase64: ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.audioMessage?.base64, mimetype: ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.audioMessage?.mimetype || 'audio/ogg', language: 'pt' }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "transcrever-audio",
+      "name": "Transcrever Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1300, 200],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "content-transcribed",
+              "name": "message.content",
+              "value": "={{ $json.transcription }}",
+              "type": "string"
+            },
+            {
+              "id": "content-type-transcribed",
+              "name": "message.content_type",
+              "value": "text",
+              "type": "string"
+            },
+            {
+              "id": "was-audio",
+              "name": "message.was_audio",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "telefone-transcribed",
+              "name": "Telefone",
+              "value": "={{ $('Dados').item.json.Telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "nome-transcribed",
+              "name": "NomeWpp",
+              "value": "={{ $('Dados').item.json.NomeWpp }}",
+              "type": "string"
+            },
+            {
+              "id": "event-transcribed",
+              "name": "message.event",
+              "value": "={{ $('Dados').item.json.message.event }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "preparar-transcricao",
+      "name": "Preparar Transcricao",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1500, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Enviar mensagem amigavel quando transcricao falhar\nconst telefone = $('Dados').item.json.Telefone.replace('@s.whatsapp.net', '');\nconst baseUrl = $('Config').item.json.config.whatsappApiUrl;\nconst instance = $('Webhook Valentina').item.json.body?.instance || $('Webhook Valentina').item.json.instance || $('Config').item.json.config.whatsappInstance;\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: `${baseUrl}/message/sendText/${instance}`,\n  body: {\n    number: telefone,\n    text: 'Desculpe, nao consegui entender seu audio. Poderia digitar sua mensagem? 🙏'\n  },\n  json: true\n});\n\nreturn [{ json: { handled: true, error: 'transcription_failed' } }];"
+      },
+      "id": "erro-transcricao",
+      "name": "Erro Transcricao",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 100]
+    },
+    {
+      "parameters": {},
+      "id": "noop-ignorar-unknown",
+      "name": "Ignorar (Tipo Desconhecido)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1300, 500]
+    },
+    {
+      "parameters": {
+        "content": "# AUDIO TRANSCRIPTION\n## Detecta mensagens de audio e transcreve via AssemblyAI",
+        "height": 80,
+        "width": 400,
+        "color": 7
+      },
+      "id": "sticky-audio-transcription",
+      "name": "Sticky Audio Transcription",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1050, 50]
+    },
+    {
+      "parameters": {
         "method": "DELETE",
         "url": "={{ $('Config').first().json.config.backendApiUrl }}/api/meeting-message/whitelist/{{ $('Extrair Numero').first().json.Telefone }}",
         "options": {
@@ -858,6 +1020,60 @@
       ]
     },
     "Dados": {
+      "main": [
+        [
+          {
+            "node": "Tipo de Mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tipo de Mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Check Whitelist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transcrever Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar (Tipo Desconhecido)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcrever Audio": {
+      "main": [
+        [
+          {
+            "node": "Preparar Transcricao",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Erro Transcricao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Transcricao": {
       "main": [
         [
           {
