@@ -1,0 +1,1202 @@
+{
+  "name": "SDR Valentina - Diet System",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# SDR Valentina - Diet System\n## Agente de Qualificacao e Agendamento\n## COM INTEGRACAO GOOGLE CALENDAR E WHITELIST\n\n**Configuracoes:** Edite o no 'Config' para alterar URL da API, instancia e calendario",
+        "height": 140,
+        "width": 450,
+        "color": 4
+      },
+      "id": "sticky-header",
+      "name": "Header",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-500, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "whatsapp-api-url",
+              "name": "config.whatsappApiUrl",
+              "value": "https://f44e519bb08b.ngrok-free.app/api/whatsapp",
+              "type": "string"
+            },
+            {
+              "id": "whatsapp-instance",
+              "name": "config.whatsappInstance",
+              "value": "nutricionist_1",
+              "type": "string"
+            },
+            {
+              "id": "google-calendar-id",
+              "name": "config.googleCalendarId",
+              "value": "primary",
+              "type": "string"
+            },
+            {
+              "id": "backend-api-url",
+              "name": "config.backendApiUrl",
+              "value": "https://api.dietsystem.com.br",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "config-node",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-500, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "valentina-sdr-webhook",
+        "options": {}
+      },
+      "id": "webhook-valentina",
+      "name": "Webhook Valentina",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-300, 400],
+      "webhookId": "valentina-sdr-webhook"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "contato",
+              "value": "={{ $json.body?.data?.key?.remoteJid || $json.data?.key?.remoteJid }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "entrada-contato",
+      "name": "Entrada de Contato",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [-100, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const raw = item.json.contato || '';\n  const telefone = raw.split('@')[0];\n  return {\n    json: {\n      ...item.json,\n      Telefone: telefone\n    }\n  };\n});"
+      },
+      "id": "extrair-numero",
+      "name": "Extrair Numero",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [100, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "telefone-formato",
+              "name": "Telefone",
+              "value": "={{ $json.Telefone }}@s.whatsapp.net",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "refaz-numero",
+      "name": "Refaz Numero",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [300, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "content-type",
+              "name": "message.content_type",
+              "value": "={{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.extendedTextMessage ? 'text' : '' }}{{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.conversation ? 'text' : '' }}",
+              "type": "string"
+            },
+            {
+              "id": "content",
+              "name": "message.content",
+              "value": "={{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.extendedTextMessage?.text || '' }}{{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).message.conversation || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "event",
+              "name": "message.event",
+              "value": "={{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).key.fromMe ? 'outcoming' : 'incoming' }}",
+              "type": "string"
+            },
+            {
+              "id": "telefone-dados",
+              "name": "Telefone",
+              "value": "={{ $json.Telefone }}",
+              "type": "string"
+            },
+            {
+              "id": "nome-wpp",
+              "name": "NomeWpp",
+              "value": "={{ ($('Webhook Valentina').item.json.body?.data || $('Webhook Valentina').item.json.data).pushName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dados-valentina",
+      "name": "Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "content": "# WHITELIST CHECK\n## Verifica se o telefone esta na whitelist\n## Apenas profissionais novos (D+1) sao processados",
+        "height": 100,
+        "width": 350,
+        "color": 5
+      },
+      "id": "sticky-whitelist",
+      "name": "Sticky Whitelist",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').item.json.config.backendApiUrl }}/api/meeting-message/whitelist/{{ $('Extrair Numero').item.json.Telefone }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "check-whitelist",
+      "name": "Check Whitelist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-whitelisted",
+              "leftValue": "={{ $json.whitelisted }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-whitelisted",
+      "name": "Is Whitelisted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Dados').item.json.message.event }}",
+                    "rightValue": "incoming",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "incoming"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "filtro-incoming",
+      "name": "Filtro Incoming",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "operation": "push",
+        "list": "=buffer:{{ $('Dados').item.json.Telefone }}",
+        "messageData": "={{ $('Dados').item.json.message.content }}",
+        "tail": true
+      },
+      "id": "redis-memory",
+      "name": "Salvar Mensagem Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1300, 400],
+      "credentials": {
+        "redis": {
+          "id": "YHOSaiu4zI4q5eZS",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "=buffer:{{ $('Dados').item.json.Telefone }}",
+        "options": {}
+      },
+      "id": "get-memory-1",
+      "name": "Get Memory 1",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1500, 400],
+      "credentials": {
+        "redis": {
+          "id": "YHOSaiu4zI4q5eZS",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "id": "espera-mensagens",
+      "name": "Espera Mensagens",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1700, 400],
+      "webhookId": "espera-valentina"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "=buffer:{{ $('Dados').item.json.Telefone }}",
+        "options": {}
+      },
+      "id": "get-memory-2",
+      "name": "Get Memory 2",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1900, 400],
+      "credentials": {
+        "redis": {
+          "id": "YHOSaiu4zI4q5eZS",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "redis2",
+              "name": "Redis2",
+              "value": "={{ $json.propertyName }}",
+              "type": "string"
+            },
+            {
+              "id": "redis1",
+              "name": "Redis1",
+              "value": "={{ $('Get Memory 1').item.json.propertyName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "compara-memory",
+      "name": "Compara Memory",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2100, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.Redis2 }}",
+              "rightValue": "={{ $json.Redis1 }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-memory-igual",
+      "name": "Memory Igual",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2300, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const redis1 = JSON.parse($json.Redis1 || '[]');\nconst redis2 = JSON.parse($json.Redis2 || '[]');\n\nconst combinado = Array.from(new Set([...redis1, ...redis2]));\nconst mensagem = combinado.join(' ');\n\nreturn [{ json: { mensagem_completa: mensagem, nome: $('Dados').item.json.NomeWpp } }];"
+      },
+      "id": "mensagem-completa",
+      "name": "Mensagem Completa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, 400]
+    },
+    {
+      "parameters": {
+        "content": "# GOOGLE CALENDAR\n## Verificar Disponibilidade",
+        "height": 80,
+        "width": 300,
+        "color": 2
+      },
+      "id": "sticky-calendar",
+      "name": "Sticky Calendar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2600, 200]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "returnAll": false,
+        "limit": 50,
+        "options": {
+          "timeMin": "={{ $now.startOf('day').toISO() }}",
+          "timeMax": "={{ $now.plus({days: 7}).endOf('day').toISO() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "buscar-disponibilidade",
+      "name": "Buscar Disponibilidade Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [2700, 400],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GOOGLE_CALENDAR_CREDENTIAL_ID",
+          "name": "Google Calendar - Diet System"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Horarios disponiveis para agendamento - 14h as 19h (horario de Brasilia)\nconst horariosBase = [\n  { dia: 'Segunda-feira', diaAbrev: 'Segunda', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Terca-feira', diaAbrev: 'Terca', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Quarta-feira', diaAbrev: 'Quarta', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Quinta-feira', diaAbrev: 'Quinta', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Sexta-feira', diaAbrev: 'Sexta', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] }\n];\n\n// Funcao para obter data/hora atual em Brasilia (UTC-3)\nconst getBrasiliaTime = () => {\n  const now = new Date();\n  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);\n  return new Date(utc - (3 * 60 * 60 * 1000)); // UTC-3\n};\n\n// Funcao para criar data em Brasilia\nconst createBrasiliaDate = (year, month, day, hour = 0, minute = 0) => {\n  const date = new Date(Date.UTC(year, month, day, hour + 3, minute, 0, 0)); // Adiciona 3h para compensar UTC-3\n  return date;\n};\n\n// Eventos existentes no calendario\nconst eventosCalendario = $input.all().map(item => ({\n  inicio: new Date(item.json.start?.dateTime || item.json.start?.date),\n  fim: new Date(item.json.end?.dateTime || item.json.end?.date),\n  titulo: item.json.summary || 'Evento'\n}));\n\n// Proximos 7 dias (baseado em Brasilia)\nconst hojeBrasilia = getBrasiliaTime();\nconst diasSemana = ['Domingo', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sabado'];\n\nlet horariosDisponiveis = [];\n\nfor (let i = 0; i < 7; i++) {\n  const data = new Date(hojeBrasilia);\n  data.setDate(hojeBrasilia.getDate() + i);\n  const diaSemana = diasSemana[data.getDay()];\n  const ano = data.getFullYear();\n  const mes = data.getMonth();\n  const dia = data.getDate();\n  const dataFormatada = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;\n  \n  const configDia = horariosBase.find(h => h.dia === diaSemana);\n  if (!configDia) continue;\n  \n  configDia.horarios.forEach(horario => {\n    const [hora, minuto] = horario.split(':');\n    const inicioSlot = createBrasiliaDate(ano, mes, dia, parseInt(hora), parseInt(minuto));\n    \n    const fimSlot = new Date(inicioSlot);\n    fimSlot.setMinutes(fimSlot.getMinutes() + 30);\n    \n    // Verificar se ha conflito com eventos existentes\n    const temConflito = eventosCalendario.some(evento => {\n      return (inicioSlot < evento.fim && fimSlot > evento.inicio);\n    });\n    \n    // Verificar se o horario ja passou (comparar com hora atual de Brasilia)\n    const agoraBrasilia = getBrasiliaTime();\n    const inicioSlotBrasilia = new Date(inicioSlot.getTime() - (3 * 60 * 60 * 1000)); // Converter para comparacao\n    \n    if (!temConflito && inicioSlotBrasilia > agoraBrasilia) {\n      horariosDisponiveis.push({\n        dia: diaSemana,\n        diaAbrev: configDia.diaAbrev,\n        data: dataFormatada,\n        horario: horario,\n        dataHoraISO: inicioSlot.toISOString()\n      });\n    }\n  });\n}\n\n// Funcao para formatar horario (14:00 -> 14h, 14:30 -> 14h30)\nconst formatarHorario = (h) => {\n  const [hora, minuto] = h.split(':');\n  const horaNum = parseInt(hora);\n  return minuto === '00' ? `${horaNum}h` : `${horaNum}h${minuto}`;\n};\n\n// Agrupar por dia para exibicao no novo formato\nconst horariosAgrupados = {};\nhorariosDisponiveis.forEach(h => {\n  const [ano, mes, dia] = h.data.split('-');\n  const chave = `${h.diaAbrev} (${dia}/${mes})`;\n  if (!horariosAgrupados[chave]) {\n    horariosAgrupados[chave] = [];\n  }\n  horariosAgrupados[chave].push(formatarHorario(h.horario));\n});\n\n// Formato: 🗓️ Segunda (09/10): 14h | 15h | 16h (com quebras de linha)\nconst linhasHorarios = [];\nObject.entries(horariosAgrupados).slice(0, 5).forEach(([dia, horarios]) => {\n  linhasHorarios.push(`🗓️ ${dia}: ${horarios.join(' | ')}`);\n});\nconst textoHorarios = linhasHorarios.join('\\n');\n\n// Passar dados para o proximo node\nconst mensagemCompleta = $('Mensagem Completa').item.json.mensagem_completa;\nconst nome = $('Mensagem Completa').item.json.nome;\n\nreturn [{\n  json: {\n    mensagem_completa: mensagemCompleta,\n    nome: nome,\n    horarios_disponiveis: horariosDisponiveis,\n    horarios_texto: textoHorarios,\n    total_slots: horariosDisponiveis.length\n  }\n}];"
+      },
+      "id": "processar-disponibilidade",
+      "name": "Processar Disponibilidade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2900, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4.1",
+        "options": {}
+      },
+      "id": "openai-model-valentina",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [3100, 700],
+      "credentials": {
+        "openAiApi": {
+          "id": "L03q2R9WKtyT5u0F",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=chat:{{ $('Dados').first().json.Telefone }}",
+        "contextWindowLength": 50,
+        "sessionTimeToLive": 3600
+      },
+      "id": "redis-chat-memory-valentina",
+      "name": "Redis Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+      "typeVersion": 1.3,
+      "position": [3300, 700],
+      "credentials": {
+        "redis": {
+          "id": "YHOSaiu4zI4q5eZS",
+          "name": "Redis account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.mensagem_completa }}",
+        "options": {
+          "systemMessage": "=# Valentina - SDR do Diet System\n\n## Identidade\nVoce e a Valentina, assistente de qualificacao e agendamento do Diet System. Voce e muito educada, profissional, transmite carinho genuino, e acolhedora e empatica. Usa linguagem leve mas profissional.\n\n## Objetivo\nQualificar leads e agendar demonstracoes da plataforma Diet System.\n\n## Dados do Lead\n- Nome: {{ $json.nome }}\n- Telefone: {{ $('Dados').first().json.Telefone }}\n\n## HORARIOS DISPONIVEIS NO CALENDARIO (USAR ESTES)\n{{ $json.horarios_texto }}\n\nIMPORTANTE: Use APENAS os horarios listados acima. Eles foram verificados no Google Calendar e estao realmente disponiveis.\n\n## Fluxo de Conversa (SIGA RIGOROSAMENTE)\n\n### ETAPA 1: BOAS-VINDAS (OBRIGATORIO)\nPara a PRIMEIRA mensagem do lead, envie:\n\nOla! Tudo bem?\n\nAqui e a Valentina, do Diet System! Vi que voce acabou de criar uma conta na nossa plataforma e fiquei muito feliz em te receber por aqui!\n\nMe conta, voce e nutricionista?\n\n### ETAPA 2: VERIFICACAO DE PROFISSAO\n\nSe NAO for nutricionista:\nQue legal ter voce por aqui!\n\nOlha, esse contato era direcionado especialmente para profissionais de nutricao, que e o publico que a nossa plataforma atende.\n\nMas fico muito feliz que tenha conhecido o Diet System! Se voce conhecer algum nutricionista que possa se beneficiar da nossa ferramenta, ficaremos muito gratos pela indicacao!\n\nTe desejo muito sucesso! Um abraco!\n[ENCERRE A CONVERSA]\n\nSe FOR nutricionista:\nQue incrivel! Fico muito feliz em saber!\n\nE sempre especial conectar com profissionais que cuidam da alimentacao e saude das pessoas.\n\nMe conta um pouquinho mais sobre voce: voce esta atendendo pacientes atualmente? E o que te motivou a criar uma conta no Diet System? Adoraria saber o que voce esta buscando!\n\n### ETAPA 3: VERIFICACAO DE ATENDIMENTO\n\nSe NAO estiver atendendo:\nEntendo perfeitamente!\n\nOlha, esse contato era para agendar uma demonstracao personalizada da plataforma, e nosso foco nesse momento sao profissionais que ja estao ativos no atendimento.\n\nMas saiba que estamos aqui sempre que voce precisar! Quando estiver atendendo e quiser conhecer como o Diet System pode facilitar sua rotina, e so nos chamar, ta?\n\nTe desejo muito sucesso na sua jornada! Conte com a gente! Um abraco carinhoso!\n[ENCERRE A CONVERSA]\n\nSe ESTIVER atendendo:\nPersonalize a resposta baseada no motivo mencionado, depois adicione:\n\nTenho uma proposta especial pra voce: que tal agendar uma reuniao de 30 minutinhos com um dos nossos especialistas? Sao nutricionistas tambem, que vao te mostrar a plataforma de forma totalmente personalizada!\n\nE tem um detalhe especial: quem participa dessa demonstracao tem acesso a descontos exclusivos!\n\nO que voce acha? Posso te mostrar alguns horarios disponiveis?\n\n### ETAPA 4: RESPOSTA SOBRE AGENDAMENTO\n\nSe NAO quiser agendar:\nSem problemas, [NOME]! Entendo completamente!\n\nFico a disposicao caso mude de ideia. Voce pode explorar sua conta e, quando sentir que e o momento certo, e so me chamar!\n\nTe desejo muito sucesso! Um abraco!\n[ENCERRE A CONVERSA]\n\nSe ACEITAR agendar:\nQue otimo, [NOME]! Fico muito feliz!\n\nAqui estao os horarios disponiveis:\n\n[COPIE O CONTEUDO DE horarios_texto PRESERVANDO CADA DIA EM UMA LINHA SEPARADA]\n\nQual desses horarios fica melhor pra voce?\n\n### ETAPA 5: CONFIRMACAO DO AGENDAMENTO\n\nQuando o lead escolher um horario, voce DEVE responder usando EXATAMENTE este formato no INICIO da mensagem:\n\n**AGENDAMENTO_CONFIRMADO**\nDia: [DIA DA SEMANA]\nData: [DATA NO FORMATO DD/MM/YYYY]\nHorario: [HORARIO NO FORMATO HH:MM]\n\nDepois envie a confirmacao para o lead EXATAMENTE assim:\n\nEsta agendado! 🎉\n\n🗓️ [Dia da semana], [DD/MM] as [HH:MM]\n👨‍🏫 Nutricionista especialista do Diet System\n🔗 Link: [sera enviado automaticamente]\n\nAlgumas dicas importantes:\n\n💻 Acesse por computador ou notebook (nao celular)\n📷 Nao precisa de webcam, fique tranquilo(a)\n🔇 Procure um lugar silencioso pra aproveitar melhor\n⏰ Se nao puder comparecer, me avisa com pelo menos 2h de antecedencia!\n\nVai ser demais! Se surgir qualquer duvida, e so me chamar aqui! 🚀\n[ENCERRE A CONVERSA]\n\n## Regras Importantes\n1. SEMPRE use o nome do lead quando disponivel\n2. Mantenha tom acolhedor e profissional\n3. SEMPRE use o formato AGENDAMENTO_CONFIRMADO quando confirmar um horario\n4. Use APENAS os horarios listados em horarios_texto e COPIE no formato exato com emojis\n5. Responda em portugues brasileiro\n6. Mantenha mensagens objetivas e curtas\n7. NAO inclua marcadores internos como [PARTE 1], [ETAPA], etc na resposta"
+        }
+      },
+      "id": "agente-valentina",
+      "name": "Valentina",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [3100, 500]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "nome-agente",
+              "name": "Nome do agente",
+              "value": "VALENTINA",
+              "type": "string"
+            },
+            {
+              "id": "resposta",
+              "name": "Resposta",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "nome-agente-valentina",
+      "name": "Nome Agente Valentina",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [3400, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resposta = ($json.Resposta || '').toLowerCase();\n\n// Cenário 1: Não é nutricionista\nconst naoEhNutricionista = resposta.includes('profissionais de nutrição') &&\n                           resposta.includes('esse contato era direcionado');\n\n// Cenário 2: Não está atendendo\nconst naoEstaAtendendo = resposta.includes('profissionais que já estão ativos no atendimento');\n\n// Cenário 3: Não quer agendar\nconst naoQuerAgendar = (resposta.includes('sem problemas') ||\n                        resposta.includes('fico a disposição') ||\n                        resposta.includes('fico à disposição')) &&\n                       !$json.Resposta.includes('AGENDAMENTO_CONFIRMADO');\n\n// Cenário 4: Agendamento confirmado\nconst agendamentoConfirmado = $json.Resposta.includes('AGENDAMENTO_CONFIRMADO');\n\n// Determinar tipo de encerramento\nlet tipoEncerramento = null;\nif (naoEhNutricionista) tipoEncerramento = 'nao_nutricionista';\nelse if (naoEstaAtendendo) tipoEncerramento = 'nao_atendendo';\nelse if (naoQuerAgendar) tipoEncerramento = 'nao_quer_agendar';\nelse if (agendamentoConfirmado) tipoEncerramento = 'agendamento_confirmado';\n\nreturn [{\n  json: {\n    Resposta: $json.Resposta,\n    tipo_encerramento: tipoEncerramento,\n    conversa_encerrada: tipoEncerramento !== null\n  }\n}];"
+      },
+      "id": "detectar-encerramento",
+      "name": "Detectar Encerramento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3500, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-conversa-encerrada",
+              "leftValue": "={{ $json.conversa_encerrada }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-conversa-encerrada",
+      "name": "Conversa Encerrada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3700, 500]
+    },
+    {
+      "parameters": {
+        "content": "# DETECÇÃO DE ENCERRAMENTO\n## Detecta quando a conversa termina (com ou sem agendamento)\n## para remover o usuário da whitelist",
+        "height": 100,
+        "width": 400,
+        "color": 6
+      },
+      "id": "sticky-detectar-encerramento",
+      "name": "Sticky Detectar Encerramento",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3450, 300]
+    },
+    {
+      "parameters": {
+        "content": "# GOOGLE CALENDAR\n## Criar Evento com Meet",
+        "height": 80,
+        "width": 400,
+        "color": 2
+      },
+      "id": "sticky-criar-evento",
+      "name": "Sticky Criar Evento",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3900, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair informacoes do agendamento confirmado da resposta do agente\nconst resposta = $json.Resposta;\nconst nomeWpp = $('Dados').first().json.NomeWpp;\nconst telefone = $('Dados').first().json.Telefone;\n\n// Funcao para obter data/hora atual em Brasilia (UTC-3)\nconst getBrasiliaTime = () => {\n  const now = new Date();\n  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);\n  return new Date(utc - (3 * 60 * 60 * 1000));\n};\n\n// Funcao para criar ISO string para horario de Brasilia\n// Recebe data em Brasilia e retorna ISO em UTC\nconst brasiliaToUTC = (ano, mes, dia, hora, minuto) => {\n  // Cria data em UTC adicionando 3 horas ao horario de Brasilia\n  const utcDate = new Date(Date.UTC(ano, mes - 1, dia, hora + 3, minuto, 0, 0));\n  return utcDate.toISOString();\n};\n\n// Verificar se a resposta contem confirmacao de agendamento\nconst temConfirmacao = resposta.includes('AGENDAMENTO_CONFIRMADO') || \n                       (resposta.toLowerCase().includes('agendado para') && \n                        resposta.toLowerCase().includes('as '));\n\nlet agendamentoConfirmado = false;\nlet dataHoraInicio = null;\nlet dataHoraFim = null;\nlet diaEncontrado = null;\nlet horarioEncontrado = null;\nlet dataEncontrada = null;\n\nif (temConfirmacao) {\n  // Tentar extrair do formato estruturado\n  const regexDia = /Dia:\\s*(\\w+(?:-feira)?)/i;\n  const regexData = /Data:\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/i;\n  const regexHorario = /Horario:\\s*(\\d{1,2}[h:]\\d{2})/i;\n  \n  const matchDia = resposta.match(regexDia);\n  const matchData = resposta.match(regexData);\n  const matchHorario = resposta.match(regexHorario);\n  \n  if (matchData && matchHorario) {\n    // Formato DD/MM/YYYY\n    const [diaStr, mesStr, anoStr] = matchData[1].split('/');\n    const horarioStr = matchHorario[1].replace('h', ':');\n    const [horaStr, minutoStr] = horarioStr.split(':');\n    \n    const ano = parseInt(anoStr);\n    const mes = parseInt(mesStr);\n    const dia = parseInt(diaStr);\n    const hora = parseInt(horaStr);\n    const minuto = parseInt(minutoStr);\n    \n    // Converter horario de Brasilia para UTC\n    dataHoraInicio = brasiliaToUTC(ano, mes, dia, hora, minuto);\n    dataHoraFim = brasiliaToUTC(ano, mes, dia, hora, minuto + 30);\n    \n    diaEncontrado = matchDia ? matchDia[1] : '';\n    horarioEncontrado = matchHorario[1];\n    dataEncontrada = matchData[1];\n    agendamentoConfirmado = true;\n  } else {\n    // Tentar extrair de forma mais flexivel\n    const regexDiaAlt = /(segunda|terca|quarta|quinta|sexta)[\\\\s-]?feira?/i;\n    const regexHorarioAlt = /(\\d{1,2})[h:](\\d{2})/i;\n    \n    const matchDiaAlt = resposta.match(regexDiaAlt);\n    const matchHorarioAlt = resposta.match(regexHorarioAlt);\n    \n    if (matchDiaAlt && matchHorarioAlt) {\n      const diasMap = {\n        'segunda': 1, 'terca': 2, 'quarta': 3, 'quinta': 4, 'sexta': 5\n      };\n      \n      const diaNum = diasMap[matchDiaAlt[1].toLowerCase()];\n      const hora = parseInt(matchHorarioAlt[1]);\n      const minuto = parseInt(matchHorarioAlt[2]);\n      \n      // Encontrar a proxima ocorrencia desse dia (baseado em Brasilia)\n      const hojeBrasilia = getBrasiliaTime();\n      const diaAtual = hojeBrasilia.getDay();\n      let diasParaAdicionar = diaNum - diaAtual;\n      if (diasParaAdicionar <= 0) diasParaAdicionar += 7;\n      \n      const dataEvento = new Date(hojeBrasilia);\n      dataEvento.setDate(hojeBrasilia.getDate() + diasParaAdicionar);\n      \n      const ano = dataEvento.getFullYear();\n      const mes = dataEvento.getMonth() + 1;\n      const dia = dataEvento.getDate();\n      \n      // Converter horario de Brasilia para UTC\n      dataHoraInicio = brasiliaToUTC(ano, mes, dia, hora, minuto);\n      dataHoraFim = brasiliaToUTC(ano, mes, dia, hora, minuto + 30);\n      \n      diaEncontrado = matchDiaAlt[0];\n      horarioEncontrado = `${hora}:${String(minuto).padStart(2, '0')}`;\n      agendamentoConfirmado = true;\n    }\n  }\n}\n\nreturn [{\n  json: {\n    agendamento_confirmado: agendamentoConfirmado,\n    data_hora_inicio: dataHoraInicio,\n    data_hora_fim: dataHoraFim,\n    dia: diaEncontrado,\n    horario: horarioEncontrado,\n    data: dataEncontrada,\n    nome_lead: nomeWpp || 'Lead',\n    telefone: telefone.replace('@s.whatsapp.net', ''),\n    resposta_original: resposta\n  }\n}];"
+      },
+      "id": "extrair-agendamento",
+      "name": "Extrair Dados Agendamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3900, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-agendamento",
+              "leftValue": "={{ $json.agendamento_confirmado }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-agendamento-confirmado",
+      "name": "Agendamento Confirmado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4100, 500]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendar": {
+          "__rl": true,
+          "value": "primary",
+          "mode": "list"
+        },
+        "start": "={{ $json.data_hora_inicio }}",
+        "end": "={{ $json.data_hora_fim }}",
+        "additionalFields": {
+          "summary": "={{ 'Demo Diet System - ' + $json.nome_lead }}",
+          "description": "={{ 'Lead: ' + $json.nome_lead + '\\nTelefone: ' + $json.telefone + '\\nDia: ' + ($json.dia || '') + '\\nHorario: ' + ($json.horario || '') + '\\n\\nAgendado via: SDR Valentina (WhatsApp)' }}",
+          "conferenceDataUi": {
+            "conferenceDataValues": {
+              "createRequest": true
+            }
+          },
+          "reminders": {
+            "remindersUi": {
+              "remindersValues": [
+                {
+                  "method": "email",
+                  "minutes": 60
+                },
+                {
+                  "method": "popup",
+                  "minutes": 30
+                }
+              ]
+            }
+          },
+          "sendUpdates": "all"
+        }
+      },
+      "id": "criar-evento-calendar",
+      "name": "Criar Evento Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [4300, 400],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "GOOGLE_CALENDAR_CREDENTIAL_ID",
+          "name": "Google Calendar - Diet System"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair link do Google Meet do evento criado\nconst evento = $json;\nconst meetLink = evento.hangoutLink || evento.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || '';\nconst respostaOriginal = $('Extrair Dados Agendamento').item.json.resposta_original;\n\n// Substituir o placeholder do link pelo link real do Meet\nlet respostaAtualizada = respostaOriginal;\n\n// Remover marcador AGENDAMENTO_CONFIRMADO e dados estruturados\nrespostaAtualizada = respostaAtualizada.replace(/\\*\\*AGENDAMENTO_CONFIRMADO\\*\\*[\\s\\S]*?Horario:[^\\n]*\\n?/i, '');\nrespostaAtualizada = respostaAtualizada.replace(/AGENDAMENTO_CONFIRMADO[\\s\\S]*?Horario:[^\\n]*\\n?/i, '');\n\n// Substituir placeholder do link pelo link real\nif (meetLink) {\n  respostaAtualizada = respostaAtualizada.replace(/🔗 Link:.*$/m, `🔗 Link: ${meetLink}`);\n  respostaAtualizada = respostaAtualizada.replace(/\\[sera enviado automaticamente\\]/gi, meetLink);\n}\n\nreturn [{ json: { Resposta: respostaAtualizada, meetLink: meetLink } }];"
+      },
+      "id": "adicionar-link-meet",
+      "name": "Adicionar Link Meet",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4500, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Para o caminho sem agendamento, preparar a resposta\nconst respostaOriginal = $json.resposta_original || '';\n\n// Remover marcadores de sistema se houver\nlet respostaLimpa = respostaOriginal\n  .replace(/\\*\\*AGENDAMENTO_CONFIRMADO\\*\\*[\\s\\S]*?Horario:[^\\n]*\\n?/gi, '')\n  .replace(/AGENDAMENTO_CONFIRMADO[\\s\\S]*?Horario:[^\\n]*\\n?/gi, '')\n  .trim();\n\nreturn [{ json: { Resposta: respostaLimpa } }];"
+      },
+      "id": "preparar-resposta-sem-calendar",
+      "name": "Preparar Resposta Sem Calendar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4300, 600]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "=buffer:{{ $('Dados').first().json.Telefone }}"
+      },
+      "id": "limpar-memoria",
+      "name": "Limpar Memoria Redis",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [5700, 500],
+      "credentials": {
+        "redis": {
+          "id": "YHOSaiu4zI4q5eZS",
+          "name": "Redis account"
+        }
+      }
+    },
+        {
+      "parameters": {
+        "jsCode": "// Dividir mensagem preservando quebras de linha\nconst resposta = $json.Resposta || '';\n\n// Remover marcadores de sistema\nlet mensagem = resposta\n  .replace(/\\*\\*AGENDAMENTO_CONFIRMADO\\*\\*[\\s\\S]*?Horario:[^\\n]*\\n?/gi, '')\n  .replace(/AGENDAMENTO_CONFIRMADO[\\s\\S]*?Horario:[^\\n]*\\n?/gi, '')\n  .trim();\n\n// Se a mensagem for curta (menos de 500 chars), enviar como uma unica mensagem\nif (mensagem.length <= 500) {\n  return [{ json: { output: { messages: [mensagem] } } }];\n}\n\n// Dividir por paragrafos (blocos separados por linha em branco)\nconst paragrafos = mensagem.split(/\\n\\n+/);\nconst mensagens = [];\nlet blocoAtual = '';\n\nfor (const paragrafo of paragrafos) {\n  // Se adicionar este paragrafo ultrapassar 500 chars, salvar o bloco atual\n  if (blocoAtual && (blocoAtual.length + paragrafo.length + 2) > 500) {\n    mensagens.push(blocoAtual.trim());\n    blocoAtual = paragrafo;\n  } else {\n    // Adicionar ao bloco atual\n    blocoAtual = blocoAtual ? blocoAtual + '\\n\\n' + paragrafo : paragrafo;\n  }\n}\n\n// Adicionar ultimo bloco se houver\nif (blocoAtual.trim()) {\n  mensagens.push(blocoAtual.trim());\n}\n\n// Se ficou apenas uma mensagem muito grande, dividir por sentencas\nif (mensagens.length === 1 && mensagens[0].length > 500) {\n  const texto = mensagens[0];\n  const partes = [];\n  let parte = '';\n  \n  // Dividir por linhas primeiro para preservar formatacao\n  const linhas = texto.split('\\n');\n  \n  for (const linha of linhas) {\n    if (parte && (parte.length + linha.length + 1) > 450) {\n      partes.push(parte.trim());\n      parte = linha;\n    } else {\n      parte = parte ? parte + '\\n' + linha : linha;\n    }\n  }\n  \n  if (parte.trim()) {\n    partes.push(parte.trim());\n  }\n  \n  return [{ json: { output: { messages: partes } } }];\n}\n\nreturn [{ json: { output: { messages: mensagens } } }];"
+      },
+      "id": "parser-chain",
+      "name": "Parser Chain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4900, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const messages = $json.output?.messages || [];\nconst telefone = $('Dados').first().json.Telefone.replace('@s.whatsapp.net', '');\n\n// Configuracoes do no Config\nconst baseUrl = $('Config').first().json.config.whatsappApiUrl;\nconst instance = $('Webhook Valentina').first().json.body?.instance || $('Webhook Valentina').first().json.instance || $('Config').first().json.config.whatsappInstance;\n\nconst results = [];\n\nfor (let i = 0; i < messages.length; i++) {\n  const response = await this.helpers.httpRequest({\n    method: 'POST',\n    url: `${baseUrl}/message/sendText/${instance}`,\n    body: { number: telefone, text: messages[i] },\n    json: true\n  });\n  \n  results.push({ message: messages[i], status: response.success ? 'sent' : 'failed' });\n  \n  // Aguarda 2 segundos entre mensagens (exceto na ultima)\n  if (i < messages.length - 1) {\n    await new Promise(resolve => setTimeout(resolve, 2000));\n  }\n}\n\nreturn [{ json: { success: true, totalSent: results.length, results } }];"
+      },
+      "id": "enviar-todas-mensagens",
+      "name": "Enviar Todas Mensagens",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5100, 500]
+    },
+    {
+      "parameters": {
+        "content": "# NAO WHITELISTED\n## Mensagem ignorada - usuario antigo buscando suporte",
+        "height": 80,
+        "width": 350,
+        "color": 1
+      },
+      "id": "sticky-not-whitelisted",
+      "name": "Sticky Not Whitelisted",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [900, 550]
+    },
+    {
+      "parameters": {},
+      "id": "noop-not-whitelisted",
+      "name": "Ignorar (Nao Whitelisted)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 600]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $('Config').first().json.config.backendApiUrl }}/api/meeting-message/whitelist/{{ $('Extrair Numero').first().json.Telefone }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "remove-whitelist",
+      "name": "Remover da Whitelist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [5500, 400]
+    },
+    {
+      "parameters": {
+        "content": "# FINALIZAR FLUXO\n## Remove usuario da whitelist quando conversa e encerrada",
+        "height": 80,
+        "width": 400,
+        "color": 3
+      },
+      "id": "sticky-remove-whitelist",
+      "name": "Sticky Remove Whitelist",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [5400, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-remove-whitelist",
+              "leftValue": "={{ $('Detectar Encerramento').item.json.conversa_encerrada }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-remove-whitelist",
+      "name": "Remove Whitelist?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [5300, 500]
+    }
+  ],
+  "connections": {
+    "Webhook Valentina": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Entrada de Contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entrada de Contato": {
+      "main": [
+        [
+          {
+            "node": "Extrair Numero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Numero": {
+      "main": [
+        [
+          {
+            "node": "Refaz Numero",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refaz Numero": {
+      "main": [
+        [
+          {
+            "node": "Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados": {
+      "main": [
+        [
+          {
+            "node": "Check Whitelist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Whitelist": {
+      "main": [
+        [
+          {
+            "node": "Is Whitelisted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Whitelisted?": {
+      "main": [
+        [
+          {
+            "node": "Filtro Incoming",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar (Nao Whitelisted)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtro Incoming": {
+      "main": [
+        [
+          {
+            "node": "Salvar Mensagem Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salvar Mensagem Redis": {
+      "main": [
+        [
+          {
+            "node": "Get Memory 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Memory 1": {
+      "main": [
+        [
+          {
+            "node": "Espera Mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera Mensagens": {
+      "main": [
+        [
+          {
+            "node": "Get Memory 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Memory 2": {
+      "main": [
+        [
+          {
+            "node": "Compara Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compara Memory": {
+      "main": [
+        [
+          {
+            "node": "Memory Igual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memory Igual": {
+      "main": [
+        [
+          {
+            "node": "Mensagem Completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem Completa": {
+      "main": [
+        [
+          {
+            "node": "Buscar Disponibilidade Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Disponibilidade Calendar": {
+      "main": [
+        [
+          {
+            "node": "Processar Disponibilidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar Disponibilidade": {
+      "main": [
+        [
+          {
+            "node": "Valentina",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Valentina",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Valentina",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valentina": {
+      "main": [
+        [
+          {
+            "node": "Nome Agente Valentina",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nome Agente Valentina": {
+      "main": [
+        [
+          {
+            "node": "Detectar Encerramento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detectar Encerramento": {
+      "main": [
+        [
+          {
+            "node": "Conversa Encerrada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversa Encerrada?": {
+      "main": [
+        [
+          {
+            "node": "Extrair Dados Agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parser Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados Agendamento": {
+      "main": [
+        [
+          {
+            "node": "Agendamento Confirmado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendamento Confirmado?": {
+      "main": [
+        [
+          {
+            "node": "Criar Evento Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preparar Resposta Sem Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Evento Calendar": {
+      "main": [
+        [
+          {
+            "node": "Adicionar Link Meet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adicionar Link Meet": {
+      "main": [
+        [
+          {
+            "node": "Parser Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Resposta Sem Calendar": {
+      "main": [
+        [
+          {
+            "node": "Parser Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remover da Whitelist": {
+      "main": [
+        [
+          {
+            "node": "Limpar Memoria Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+        "Parser Chain": {
+      "main": [
+        [
+          {
+            "node": "Enviar Todas Mensagens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Todas Mensagens": {
+      "main": [
+        [
+          {
+            "node": "Remove Whitelist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Whitelist?": {
+      "main": [
+        [
+          {
+            "node": "Remover da Whitelist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Limpar Memoria Redis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}
