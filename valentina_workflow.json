@@ -21,7 +21,7 @@
             {
               "id": "whatsapp-api-url",
               "name": "config.whatsappApiUrl",
-              "value": "https://f44e519bb08b.ngrok-free.app/api/whatsapp",
+              "value": "https://api-whatsapp.dietsystem.com.br/api/whatsapp",
               "type": "string"
             },
             {
