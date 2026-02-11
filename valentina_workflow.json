@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# SDR Valentina - Diet System\n## Agente de Qualificacao e Agendamento\n## COM INTEGRACAO GOOGLE CALENDAR E WHITELIST\n\n**Configuracoes:** Edite o no 'Config' para alterar URL da API, instancia e calendario",
+        "content": "# SDR Valentina - Diet System\n## Agente de Qualificacao e Agendamento\n## COM INTEGRACAO CALENDLY E WHITELIST\n\n**Configuracoes:** Edite o no 'Config' para alterar URL da API e instancia",
         "height": 140,
         "width": 450,
         "color": 4
@@ -28,12 +28,6 @@
               "id": "whatsapp-instance",
               "name": "config.whatsappInstance",
               "value": "nutricionist_1",
-              "type": "string"
-            },
-            {
-              "id": "google-calendar-id",
-              "name": "config.googleCalendarId",
-              "value": "primary",
               "type": "string"
             },
             {
@@ -392,58 +386,6 @@
     },
     {
       "parameters": {
-        "content": "# GOOGLE CALENDAR\n## Verificar Disponibilidade",
-        "height": 80,
-        "width": 300,
-        "color": 2
-      },
-      "id": "sticky-calendar",
-      "name": "Sticky Calendar",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [2600, 200]
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "calendar": {
-          "__rl": true,
-          "value": "primary",
-          "mode": "list"
-        },
-        "returnAll": false,
-        "limit": 50,
-        "options": {
-          "timeMin": "={{ $now.startOf('day').toISO() }}",
-          "timeMax": "={{ $now.plus({days: 21}).endOf('day').toISO() }}",
-          "singleEvents": true,
-          "orderBy": "startTime"
-        }
-      },
-      "id": "buscar-disponibilidade",
-      "name": "Buscar Disponibilidade Calendar",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.2,
-      "position": [2700, 400],
-      "credentials": {
-        "googleCalendarOAuth2Api": {
-          "id": "GOOGLE_CALENDAR_CREDENTIAL_ID",
-          "name": "Google Calendar - Diet System"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Horarios disponiveis para agendamento - 14h as 19h (horario de Brasilia)\nconst horariosBase = [\n  { dia: 'Segunda-feira', diaAbrev: 'Segunda', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Terca-feira', diaAbrev: 'Terca', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Quarta-feira', diaAbrev: 'Quarta', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Quinta-feira', diaAbrev: 'Quinta', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] },\n  { dia: 'Sexta-feira', diaAbrev: 'Sexta', horarios: ['14:00', '15:00', '16:00', '17:00', '18:00', '19:00'] }\n];\n\n// Funcao para obter data/hora atual em Brasilia (UTC-3)\nconst getBrasiliaTime = () => {\n  const now = new Date();\n  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);\n  return new Date(utc - (3 * 60 * 60 * 1000)); // UTC-3\n};\n\n// Funcao para criar data em Brasilia\nconst createBrasiliaDate = (year, month, day, hour = 0, minute = 0) => {\n  const date = new Date(Date.UTC(year, month, day, hour + 3, minute, 0, 0)); // Adiciona 3h para compensar UTC-3\n  return date;\n};\n\n// Eventos existentes no calendario\nconst eventosCalendario = $input.all().map(item => ({\n  inicio: new Date(item.json.start?.dateTime || item.json.start?.date),\n  fim: new Date(item.json.end?.dateTime || item.json.end?.date),\n  titulo: item.json.summary || 'Evento'\n}));\n\n// Proximos 21 dias (baseado em Brasilia) - 3 semanas para mais opcoes\nconst hojeBrasilia = getBrasiliaTime();\nconst diasSemana = ['Domingo', 'Segunda-feira', 'Terca-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sabado'];\nconst mesesAbrev = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];\n\nlet horariosDisponiveis = [];\n\nfor (let i = 0; i < 21; i++) {\n  const data = new Date(hojeBrasilia);\n  data.setDate(hojeBrasilia.getDate() + i);\n  const diaSemana = diasSemana[data.getDay()];\n  const ano = data.getFullYear();\n  const mes = data.getMonth();\n  const dia = data.getDate();\n  const dataFormatada = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;\n  \n  const configDia = horariosBase.find(h => h.dia === diaSemana);\n  if (!configDia) continue;\n  \n  configDia.horarios.forEach(horario => {\n    const [hora, minuto] = horario.split(':');\n    const inicioSlot = createBrasiliaDate(ano, mes, dia, parseInt(hora), parseInt(minuto));\n    \n    const fimSlot = new Date(inicioSlot);\n    fimSlot.setMinutes(fimSlot.getMinutes() + 30);\n    \n    // Verificar se ha conflito com eventos existentes\n    const temConflito = eventosCalendario.some(evento => {\n      return (inicioSlot < evento.fim && fimSlot > evento.inicio);\n    });\n    \n    // Verificar se o horario ja passou (comparar com hora atual de Brasilia)\n    const agoraBrasilia = getBrasiliaTime();\n    const inicioSlotBrasilia = new Date(inicioSlot.getTime() - (3 * 60 * 60 * 1000)); // Converter para comparacao\n    \n    if (!temConflito && inicioSlotBrasilia > agoraBrasilia) {\n      horariosDisponiveis.push({\n        dia: diaSemana,\n        diaAbrev: configDia.diaAbrev,\n        data: dataFormatada,\n        dataFormatadaBR: `${String(dia).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}`,\n        horario: horario,\n        dataHoraISO: inicioSlot.toISOString(),\n        semana: i < 7 ? 1 : (i < 14 ? 2 : 3)\n      });\n    }\n  });\n}\n\n// Funcao para formatar horario (14:00 -> 14h, 14:30 -> 14h30)\nconst formatarHorario = (h) => {\n  const [hora, minuto] = h.split(':');\n  const horaNum = parseInt(hora);\n  return minuto === '00' ? `${horaNum}h` : `${horaNum}h${minuto}`;\n};\n\n// Separar horarios por semana\nconst horariosSemana1 = horariosDisponiveis.filter(h => h.semana === 1);\nconst horariosSemana2 = horariosDisponiveis.filter(h => h.semana === 2);\nconst horariosSemana3 = horariosDisponiveis.filter(h => h.semana === 3);\n\n// Agrupar por dia para exibicao - SEMANA 1 (proximos 5 dias uteis)\nconst horariosAgrupadosSemana1 = {};\nhorariosSemana1.forEach(h => {\n  const chave = `${h.diaAbrev} (${h.dataFormatadaBR})`;\n  if (!horariosAgrupadosSemana1[chave]) {\n    horariosAgrupadosSemana1[chave] = [];\n  }\n  horariosAgrupadosSemana1[chave].push(formatarHorario(h.horario));\n});\n\n// Texto para exibicao inicial (primeiros 5 dias)\nconst linhasHorariosSemana1 = [];\nObject.entries(horariosAgrupadosSemana1).slice(0, 5).forEach(([dia, horarios]) => {\n  linhasHorariosSemana1.push(`🗓️ ${dia}: ${horarios.join(' | ')}`);\n});\nconst textoHorariosSemana1 = linhasHorariosSemana1.join('\\n');\n\n// Agrupar SEMANA 2\nconst horariosAgrupadosSemana2 = {};\nhorariosSemana2.forEach(h => {\n  const chave = `${h.diaAbrev} (${h.dataFormatadaBR})`;\n  if (!horariosAgrupadosSemana2[chave]) {\n    horariosAgrupadosSemana2[chave] = [];\n  }\n  horariosAgrupadosSemana2[chave].push(formatarHorario(h.horario));\n});\n\nconst linhasHorariosSemana2 = [];\nObject.entries(horariosAgrupadosSemana2).forEach(([dia, horarios]) => {\n  linhasHorariosSemana2.push(`🗓️ ${dia}: ${horarios.join(' | ')}`);\n});\nconst textoHorariosSemana2 = linhasHorariosSemana2.join('\\n');\n\n// Agrupar SEMANA 3\nconst horariosAgrupadosSemana3 = {};\nhorariosSemana3.forEach(h => {\n  const chave = `${h.diaAbrev} (${h.dataFormatadaBR})`;\n  if (!horariosAgrupadosSemana3[chave]) {\n    horariosAgrupadosSemana3[chave] = [];\n  }\n  horariosAgrupadosSemana3[chave].push(formatarHorario(h.horario));\n});\n\nconst linhasHorariosSemana3 = [];\nObject.entries(horariosAgrupadosSemana3).forEach(([dia, horarios]) => {\n  linhasHorariosSemana3.push(`🗓️ ${dia}: ${horarios.join(' | ')}`);\n});\nconst textoHorariosSemana3 = linhasHorariosSemana3.join('\\n');\n\n// Texto completo com todas as semanas\nconst textoHorariosCompleto = [\n  '📅 SEMANA 1 (proximos dias):',\n  textoHorariosSemana1 || '(sem horarios disponiveis)',\n  '',\n  '📅 SEMANA 2:',\n  textoHorariosSemana2 || '(sem horarios disponiveis)',\n  '',\n  '📅 SEMANA 3:',\n  textoHorariosSemana3 || '(sem horarios disponiveis)'\n].join('\\n');\n\n// Lista estruturada para verificacao de horarios especificos\nconst listaHorariosEstruturada = horariosDisponiveis.map(h => ({\n  descricao: `${h.diaAbrev} ${h.dataFormatadaBR} as ${formatarHorario(h.horario)}`,\n  dia: h.dia,\n  data: h.dataFormatadaBR,\n  horario: h.horario,\n  horarioFormatado: formatarHorario(h.horario),\n  dataISO: h.data\n}));\n\n// Passar dados para o proximo node\nconst mensagemCompleta = $('Mensagem Completa').item.json.mensagem_completa;\nconst nome = $('Mensagem Completa').item.json.nome;\n\nreturn [{\n  json: {\n    mensagem_completa: mensagemCompleta,\n    nome: nome,\n    horarios_disponiveis: horariosDisponiveis,\n    horarios_texto: textoHorariosSemana1,\n    horarios_semana2: textoHorariosSemana2,\n    horarios_semana3: textoHorariosSemana3,\n    horarios_completo: textoHorariosCompleto,\n    lista_horarios: JSON.stringify(listaHorariosEstruturada),\n    total_slots: horariosDisponiveis.length,\n    total_semana1: horariosSemana1.length,\n    total_semana2: horariosSemana2.length,\n    total_semana3: horariosSemana3.length\n  }\n}];"
-      },
-      "id": "processar-disponibilidade",
-      "name": "Processar Disponibilidade",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [2900, 400]
-    },
-    {
-      "parameters": {
         "model": "gpt-4.1",
         "options": {}
       },
@@ -484,7 +426,7 @@
         "promptType": "define",
         "text": "={{ $json.mensagem_completa }}",
         "options": {
-          "systemMessage": "=# Valentina - SDR do Diet System\n\n## Identidade\nVoce e a Valentina, assistente de qualificacao e agendamento do Diet System. Voce e muito educada, profissional, transmite carinho genuino, e acolhedora e empatica. Usa linguagem leve mas profissional.\n\n## Objetivo\nQualificar leads e agendar demonstracoes da plataforma Diet System.\n\n## Dados do Lead\n- Nome: {{ $json.nome }}\n- Telefone: {{ $('Dados').first().json.Telefone }}\n\n## HORARIOS DISPONIVEIS NO CALENDARIO\n\n### Horarios da Semana Atual (mostrar primeiro):\n{{ $json.horarios_texto }}\n\n### Horarios da Proxima Semana (usar se o lead pedir mais opcoes):\n{{ $json.horarios_semana2 }}\n\n### Horarios da Terceira Semana (usar se necessario):\n{{ $json.horarios_semana3 }}\n\n### Lista Completa de Horarios Disponiveis (para verificar horarios especificos):\n{{ $json.lista_horarios }}\n\nTotal de horarios disponiveis: {{ $json.total_slots }} (Semana 1: {{ $json.total_semana1 }}, Semana 2: {{ $json.total_semana2 }}, Semana 3: {{ $json.total_semana3 }})\n\nIMPORTANTE: Use APENAS os horarios listados acima. Eles foram verificados no Google Calendar e estao realmente disponiveis.\n\n## Fluxo de Conversa (SIGA RIGOROSAMENTE)\n\n### ETAPA 1: BOAS-VINDAS (OBRIGATORIO)\nPara a PRIMEIRA mensagem do lead, envie:\n\nOla! Tudo bem?\n\nAqui e a Valentina, do Diet System! Vi que voce acabou de criar uma conta na nossa plataforma e fiquei muito feliz em te receber por aqui!\n\nMe conta, voce e nutricionista?\n\n### ETAPA 2: VERIFICACAO DE PROFISSAO\n\nSe NAO for nutricionista:\nQue legal ter voce por aqui!\n\nOlha, esse contato era direcionado especialmente para profissionais de nutricao, que e o publico que a nossa plataforma atende.\n\nMas fico muito feliz que tenha conhecido o Diet System! Se voce conhecer algum nutricionista que possa se beneficiar da nossa ferramenta, ficaremos muito gratos pela indicacao!\n\nTe desejo muito sucesso! Um abraco!\n[ENCERRE A CONVERSA]\n\nSe FOR nutricionista:\nQue incrivel! Fico muito feliz em saber!\n\nE sempre especial conectar com profissionais que cuidam da alimentacao e saude das pessoas.\n\nMe conta um pouquinho mais sobre voce: voce esta atendendo pacientes atualmente? E o que te motivou a criar uma conta no Diet System? Adoraria saber o que voce esta buscando!\n\n### ETAPA 3: VERIFICACAO DE ATENDIMENTO\n\nSe NAO estiver atendendo:\nEntendo perfeitamente!\n\nOlha, esse contato era para agendar uma demonstracao personalizada da plataforma, e nosso foco nesse momento sao profissionais que ja estao ativos no atendimento.\n\nMas saiba que estamos aqui sempre que voce precisar! Quando estiver atendendo e quiser conhecer como o Diet System pode facilitar sua rotina, e so nos chamar, ta?\n\nTe desejo muito sucesso na sua jornada! Conte com a gente! Um abraco carinhoso!\n[ENCERRE A CONVERSA]\n\nSe ESTIVER atendendo:\nPersonalize a resposta baseada no motivo mencionado, depois adicione:\n\nTenho uma proposta especial pra voce: que tal agendar uma reuniao de 30 minutinhos com um dos nossos especialistas? Sao nutricionistas tambem, que vao te mostrar a plataforma de forma totalmente personalizada!\n\nE tem um detalhe especial: quem participa dessa demonstracao tem acesso a descontos exclusivos!\n\nO que voce acha? Posso te mostrar alguns horarios disponiveis?\n\n### ETAPA 4: RESPOSTA SOBRE AGENDAMENTO\n\nSe NAO quiser agendar:\nSem problemas, [NOME]! Entendo completamente!\n\nFico a disposicao caso mude de ideia. Voce pode explorar sua conta e, quando sentir que e o momento certo, e so me chamar!\n\nTe desejo muito sucesso! Um abraco!\n[ENCERRE A CONVERSA]\n\nSe ACEITAR agendar:\nQue otimo, [NOME]! Fico muito feliz!\n\nAqui estao os horarios disponiveis para os proximos dias:\n\n[COPIE O CONTEUDO DE horarios_texto - SEMANA 1 PRESERVANDO CADA DIA EM UMA LINHA SEPARADA]\n\nSe nenhum desses horarios funcionar pra voce, me avisa que tenho mais opcoes nas proximas semanas!\n\nQual desses horarios fica melhor pra voce?\n\n### ETAPA 4.1: SOLICITACAO DE OUTROS HORARIOS\n\nSe o lead disser que NENHUM horario serve ou pedir MAIS OPCOES:\n\nEntendo! Deixa eu verificar mais opcoes pra voce...\n\nTenho esses horarios disponiveis na proxima semana:\n\n[COPIE O CONTEUDO DE horarios_semana2 PRESERVANDO CADA DIA EM UMA LINHA SEPARADA]\n\nAlgum desses funciona melhor pra voce?\n\nSe ainda nao servir, mostre horarios_semana3:\n\nE na terceira semana tenho:\n\n[COPIE O CONTEUDO DE horarios_semana3]\n\nSe o lead perguntar por um HORARIO ou DATA ESPECIFICA:\n1. Consulte a 'lista_horarios' para verificar se o horario solicitado esta disponivel\n2. Se ESTIVER disponivel: confirme e prossiga para ETAPA 5\n3. Se NAO estiver disponivel: informe gentilmente e sugira alternativas proximas\n\nExemplo de resposta quando horario especifico NAO esta disponivel:\nInfelizmente esse horario ja esta ocupado. Mas tenho disponibilidade em [sugerir 2-3 horarios proximos da lista]. Algum desses funciona?\n\nSe o lead perguntar por um dia especifico (ex: 'tem horario na quinta?'):\n1. Consulte a lista_horarios e filtre pelos horarios daquele dia\n2. Liste os horarios disponiveis para aquele dia especifico\n3. Se nao houver horarios naquele dia, sugira o dia mais proximo com disponibilidade\n\n### ETAPA 5: CONFIRMACAO DO AGENDAMENTO\n\nQuando o lead escolher um horario, voce DEVE responder usando EXATAMENTE este formato no INICIO da mensagem:\n\n**AGENDAMENTO_CONFIRMADO**\nDia: [DIA DA SEMANA]\nData: [DATA NO FORMATO DD/MM/YYYY]\nHorario: [HORARIO NO FORMATO HH:MM]\n\nDepois envie a confirmacao para o lead EXATAMENTE assim:\n\nEsta agendado! 🎉\n\n🗓️ [Dia da semana], [DD/MM] as [HH:MM]\n👨‍🏫 Nutricionista especialista do Diet System\n🔗 Link: [sera enviado automaticamente]\n\nAlgumas dicas importantes:\n\n💻 Acesse por computador ou notebook (nao celular)\n📷 Nao precisa de webcam, fique tranquilo(a)\n🔇 Procure um lugar silencioso pra aproveitar melhor\n⏰ Se nao puder comparecer, me avisa com pelo menos 2h de antecedencia!\n\nVai ser demais! Se surgir qualquer duvida, e so me chamar aqui! 🚀\n[ENCERRE A CONVERSA]\n\n## Regras Importantes\n1. SEMPRE use o nome do lead quando disponivel\n2. Mantenha tom acolhedor e profissional\n3. SEMPRE use o formato AGENDAMENTO_CONFIRMADO quando confirmar um horario\n4. Inicialmente mostre apenas os horarios da SEMANA 1 (horarios_texto)\n5. Mostre horarios das SEMANAS 2 e 3 apenas quando o lead pedir mais opcoes\n6. Ao verificar horario especifico, SEMPRE consulte a lista_horarios\n7. Use APENAS os horarios listados - NAO invente horarios\n8. Responda em portugues brasileiro\n9. Mantenha mensagens objetivas e curtas\n10. NAO inclua marcadores internos como [PARTE 1], [ETAPA], etc na resposta"
+          "systemMessage": "=# Valentina - SDR do DietSystem\n\n## Identidade\nVoce e a Valentina, assistente de qualificacao e agendamento do DietSystem. Voce e muito educada, profissional, transmite carinho genuino, e acolhedora e empatica. Usa linguagem leve mas profissional.\n\n## Objetivo\nQualificar leads e agendar demonstracoes da plataforma DietSystem.\n\n## Dados do Lead\n- Nome: {{ $json.nome }}\n- Telefone: {{ $('Dados').first().json.Telefone }}\n\n## Link de Agendamento Calendly\nhttps://calendly.com/meet-dietsystem/30min\n\nIMPORTANTE: Quando o lead aceitar agendar, envie o link do Calendly para que ele escolha o melhor horario. NAO tente marcar horarios especificos.\n\n## Fluxo de Conversa (SIGA RIGOROSAMENTE)\n\n### ETAPA 1: BOAS-VINDAS (OBRIGATORIO)\nPara a PRIMEIRA mensagem do lead, envie:\n\nOla! Tudo bem?\n\nAqui e a Valentina, do DietSystem! Vi que voce acabou de criar uma conta na nossa plataforma e fiquei muito feliz em te receber por aqui!\n\nMe conta, voce e nutricionista?\n\n### ETAPA 2: VERIFICACAO DE PROFISSAO\n\nSe NAO for nutricionista:\nQue legal ter voce por aqui!\n\nOlha, esse contato era direcionado especialmente para profissionais de nutricao, que e o publico que a nossa plataforma atende.\n\nMas fico muito feliz que tenha conhecido o DietSystem! Se voce conhecer algum nutricionista que possa se beneficiar da nossa ferramenta, ficaremos muito gratos pela indicacao!\n\nTe desejo muito sucesso! Um abraco!\n[ENCERRE A CONVERSA]\n\nSe FOR nutricionista:\nQue incrivel! Fico muito feliz em saber!\n\nE sempre especial conectar com profissionais que cuidam da alimentacao e saude das pessoas.\n\nMe conta um pouquinho mais sobre voce: voce esta atendendo pacientes atualmente? E o que te motivou a criar uma conta no DietSystem? Adoraria saber o que voce esta buscando!\n\n### ETAPA 3: VERIFICACAO DE ATENDIMENTO\n\nSe NAO estiver atendendo:\nEntendo perfeitamente!\n\nOlha, esse contato era para agendar uma demonstracao personalizada da plataforma, e nosso foco nesse momento sao profissionais que ja estao ativos no atendimento.\n\nMas saiba que estamos aqui sempre que voce precisar! Quando estiver atendendo e quiser conhecer como o DietSystem pode facilitar sua rotina, e so nos chamar, ta?\n\nTe desejo muito sucesso na sua jornada! Conte com a gente! Um abraco carinhoso!\n[ENCERRE A CONVERSA]\n\nSe ESTIVER atendendo:\nPersonalize a resposta baseada no motivo mencionado, depois adicione:\n\nTenho uma proposta especial pra voce: que tal agendar uma reuniao de 30 minutinhos com um dos nossos especialistas? Sao nutricionistas tambem, que vao te mostrar a plataforma de forma totalmente personalizada!\n\nE tem um detalhe especial: quem participa dessa demonstracao tem acesso a descontos exclusivos!\n\nO que voce acha? Posso te enviar o link para agendar?\n\n### ETAPA 4: RESPOSTA SOBRE AGENDAMENTO\n\nSe NAO quiser agendar:\nSem problemas, [NOME]! Entendo completamente!\n\nFico a disposicao caso mude de ideia. Voce pode explorar sua conta e, quando sentir que e o momento certo, e so me chamar!\n\nTe desejo muito sucesso! Um abraco!\n[ENCERRE A CONVERSA]\n\nSe ACEITAR agendar:\nResponda de forma personalizada ao contexto da conversa, usando este modelo como base:\n\nMuito obrigado por compartilhar sua experiencia!\n\nFico muito feliz em saber que voce gostou da plataforma e percebeu o quanto a IA pode facilitar no dia a dia. E totalmente normal, no comeco, nao se sentir 100% segura - principalmente quando estamos comecando a atender no particular.\n\nQue tal agendarmos uma reuniao rapida para eu te mostrar, na pratica, como utilizar o sistema? Assim voce tira suas duvidas ao vivo e ja sai mais confiante para usar com seus pacientes.\n\nSegue o link da agenda para escolher o melhor horario para voce: https://calendly.com/meet-dietsystem/30min\n[ENCERRE A CONVERSA]\n\n## Regras Importantes\n1. SEMPRE use o nome do lead quando disponivel\n2. Mantenha tom acolhedor e profissional\n3. Responda em portugues brasileiro\n4. Mantenha mensagens objetivas e curtas\n5. NAO inclua marcadores internos como [PARTE 1], [ETAPA], etc na resposta\n6. Quando o lead aceitar agendar, SEMPRE inclua o link https://calendly.com/meet-dietsystem/30min\n7. NAO tente marcar horarios especificos - o lead escolhe o horario pelo Calendly\n8. A marca e DietSystem (junto, sem espaco)"
         }
       },
       "id": "agente-valentina",
@@ -521,7 +463,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const resposta = ($json.Resposta || '').toLowerCase();\n\n// Cenário 1: Não é nutricionista\nconst naoEhNutricionista = resposta.includes('profissionais de nutrição') &&\n                           resposta.includes('esse contato era direcionado');\n\n// Cenário 2: Não está atendendo\nconst naoEstaAtendendo = resposta.includes('profissionais que já estão ativos no atendimento');\n\n// Cenário 3: Não quer agendar - PRECISA de indicadores mais específicos de encerramento\n// A frase precisa conter TANTO uma despedida quanto indicadores de desistência\nconst temDespedida = resposta.includes('te desejo muito sucesso') ||\n                     resposta.includes('um abraço') ||\n                     resposta.includes('um abraco') ||\n                     (resposta.includes('fico a disposição') && resposta.includes('mude de ideia')) ||\n                     (resposta.includes('fico à disposição') && resposta.includes('mude de ideia'));\n\nconst indicadoresEncerramento = resposta.includes('entendo completamente') ||\n                                 resposta.includes('caso mude de ideia') ||\n                                 resposta.includes('quando sentir que é o momento');\n\nconst naoQuerAgendar = temDespedida && indicadoresEncerramento &&\n                       !$json.Resposta.includes('AGENDAMENTO_CONFIRMADO');\n\n// Cenário 4: Agendamento confirmado\nconst agendamentoConfirmado = $json.Resposta.includes('AGENDAMENTO_CONFIRMADO');\n\n// Determinar tipo de encerramento\nlet tipoEncerramento = null;\nif (naoEhNutricionista) tipoEncerramento = 'nao_nutricionista';\nelse if (naoEstaAtendendo) tipoEncerramento = 'nao_atendendo';\nelse if (naoQuerAgendar) tipoEncerramento = 'nao_quer_agendar';\nelse if (agendamentoConfirmado) tipoEncerramento = 'agendamento_confirmado';\n\nreturn [{\n  json: {\n    Resposta: $json.Resposta,\n    tipo_encerramento: tipoEncerramento,\n    conversa_encerrada: tipoEncerramento !== null\n  }\n}];"
+        "jsCode": "const resposta = ($json.Resposta || '').toLowerCase();\n\n// Cenário 1: Não é nutricionista\nconst naoEhNutricionista = resposta.includes('profissionais de nutrição') &&\n                           resposta.includes('esse contato era direcionado');\n\n// Cenário 2: Não está atendendo\nconst naoEstaAtendendo = resposta.includes('profissionais que já estão ativos no atendimento');\n\n// Cenário 3: Não quer agendar\nconst temDespedida = resposta.includes('te desejo muito sucesso') ||\n                     resposta.includes('um abraço') ||\n                     resposta.includes('um abraco') ||\n                     (resposta.includes('fico a disposição') && resposta.includes('mude de ideia')) ||\n                     (resposta.includes('fico à disposição') && resposta.includes('mude de ideia'));\n\nconst indicadoresEncerramento = resposta.includes('entendo completamente') ||\n                                 resposta.includes('caso mude de ideia') ||\n                                 resposta.includes('quando sentir que é o momento');\n\nconst naoQuerAgendar = temDespedida && indicadoresEncerramento &&\n                       !resposta.includes('calendly.com');\n\n// Cenário 4: Agendamento via Calendly (link enviado)\nconst agendamentoCalendly = resposta.includes('calendly.com/meet-dietsystem');\n\n// Determinar tipo de encerramento\nlet tipoEncerramento = null;\nif (naoEhNutricionista) tipoEncerramento = 'nao_nutricionista';\nelse if (naoEstaAtendendo) tipoEncerramento = 'nao_atendendo';\nelse if (naoQuerAgendar) tipoEncerramento = 'nao_quer_agendar';\nelse if (agendamentoCalendly) tipoEncerramento = 'agendamento_calendly';\n\nreturn [{\n  json: {\n    Resposta: $json.Resposta,\n    tipo_encerramento: tipoEncerramento,\n    conversa_encerrada: tipoEncerramento !== null\n  }\n}];"
       },
       "id": "detectar-encerramento",
       "name": "Detectar Encerramento",
@@ -571,126 +513,6 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [3450, 300]
-    },
-    {
-      "parameters": {
-        "content": "# GOOGLE CALENDAR\n## Criar Evento com Meet",
-        "height": 80,
-        "width": 400,
-        "color": 2
-      },
-      "id": "sticky-criar-evento",
-      "name": "Sticky Criar Evento",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [3900, 200]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extrair informacoes do agendamento confirmado da resposta do agente\nconst resposta = $json.Resposta;\nconst nomeWpp = $('Dados').first().json.NomeWpp;\nconst telefone = $('Dados').first().json.Telefone;\n\n// Funcao para obter data/hora atual em Brasilia (UTC-3)\nconst getBrasiliaTime = () => {\n  const now = new Date();\n  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);\n  return new Date(utc - (3 * 60 * 60 * 1000));\n};\n\n// Funcao para criar ISO string para horario de Brasilia\n// Recebe data em Brasilia e retorna ISO em UTC\nconst brasiliaToUTC = (ano, mes, dia, hora, minuto) => {\n  // Cria data em UTC adicionando 3 horas ao horario de Brasilia\n  const utcDate = new Date(Date.UTC(ano, mes - 1, dia, hora + 3, minuto, 0, 0));\n  return utcDate.toISOString();\n};\n\n// Verificar se a resposta contem confirmacao de agendamento\nconst temConfirmacao = resposta.includes('AGENDAMENTO_CONFIRMADO') || \n                       (resposta.toLowerCase().includes('agendado para') && \n                        resposta.toLowerCase().includes('as '));\n\nlet agendamentoConfirmado = false;\nlet dataHoraInicio = null;\nlet dataHoraFim = null;\nlet diaEncontrado = null;\nlet horarioEncontrado = null;\nlet dataEncontrada = null;\n\nif (temConfirmacao) {\n  // Tentar extrair do formato estruturado\n  const regexDia = /Dia:\\s*(\\w+(?:-feira)?)/i;\n  const regexData = /Data:\\s*(\\d{2}\\/\\d{2}\\/\\d{4})/i;\n  const regexHorario = /Horario:\\s*(\\d{1,2}[h:]\\d{2})/i;\n  \n  const matchDia = resposta.match(regexDia);\n  const matchData = resposta.match(regexData);\n  const matchHorario = resposta.match(regexHorario);\n  \n  if (matchData && matchHorario) {\n    // Formato DD/MM/YYYY\n    const [diaStr, mesStr, anoStr] = matchData[1].split('/');\n    const horarioStr = matchHorario[1].replace('h', ':');\n    const [horaStr, minutoStr] = horarioStr.split(':');\n    \n    const ano = parseInt(anoStr);\n    const mes = parseInt(mesStr);\n    const dia = parseInt(diaStr);\n    const hora = parseInt(horaStr);\n    const minuto = parseInt(minutoStr);\n    \n    // Converter horario de Brasilia para UTC\n    dataHoraInicio = brasiliaToUTC(ano, mes, dia, hora, minuto);\n    dataHoraFim = brasiliaToUTC(ano, mes, dia, hora, minuto + 30);\n    \n    diaEncontrado = matchDia ? matchDia[1] : '';\n    horarioEncontrado = matchHorario[1];\n    dataEncontrada = matchData[1];\n    agendamentoConfirmado = true;\n  } else {\n    // Tentar extrair de forma mais flexivel\n    const regexDiaAlt = /(segunda|terca|quarta|quinta|sexta)[\\\\s-]?feira?/i;\n    const regexHorarioAlt = /(\\d{1,2})[h:](\\d{2})/i;\n    \n    const matchDiaAlt = resposta.match(regexDiaAlt);\n    const matchHorarioAlt = resposta.match(regexHorarioAlt);\n    \n    if (matchDiaAlt && matchHorarioAlt) {\n      const diasMap = {\n        'segunda': 1, 'terca': 2, 'quarta': 3, 'quinta': 4, 'sexta': 5\n      };\n      \n      const diaNum = diasMap[matchDiaAlt[1].toLowerCase()];\n      const hora = parseInt(matchHorarioAlt[1]);\n      const minuto = parseInt(matchHorarioAlt[2]);\n      \n      // Encontrar a proxima ocorrencia desse dia (baseado em Brasilia)\n      const hojeBrasilia = getBrasiliaTime();\n      const diaAtual = hojeBrasilia.getDay();\n      let diasParaAdicionar = diaNum - diaAtual;\n      if (diasParaAdicionar <= 0) diasParaAdicionar += 7;\n      \n      const dataEvento = new Date(hojeBrasilia);\n      dataEvento.setDate(hojeBrasilia.getDate() + diasParaAdicionar);\n      \n      const ano = dataEvento.getFullYear();\n      const mes = dataEvento.getMonth() + 1;\n      const dia = dataEvento.getDate();\n      \n      // Converter horario de Brasilia para UTC\n      dataHoraInicio = brasiliaToUTC(ano, mes, dia, hora, minuto);\n      dataHoraFim = brasiliaToUTC(ano, mes, dia, hora, minuto + 30);\n      \n      diaEncontrado = matchDiaAlt[0];\n      horarioEncontrado = `${hora}:${String(minuto).padStart(2, '0')}`;\n      agendamentoConfirmado = true;\n    }\n  }\n}\n\nreturn [{\n  json: {\n    agendamento_confirmado: agendamentoConfirmado,\n    data_hora_inicio: dataHoraInicio,\n    data_hora_fim: dataHoraFim,\n    dia: diaEncontrado,\n    horario: horarioEncontrado,\n    data: dataEncontrada,\n    nome_lead: nomeWpp || 'Lead',\n    telefone: telefone.replace('@s.whatsapp.net', ''),\n    resposta_original: resposta\n  }\n}];"
-      },
-      "id": "extrair-agendamento",
-      "name": "Extrair Dados Agendamento",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [3900, 500]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "check-agendamento",
-              "leftValue": "={{ $json.agendamento_confirmado }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "if-agendamento-confirmado",
-      "name": "Agendamento Confirmado?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [4100, 500]
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "calendar": {
-          "__rl": true,
-          "value": "primary",
-          "mode": "list"
-        },
-        "start": "={{ $json.data_hora_inicio }}",
-        "end": "={{ $json.data_hora_fim }}",
-        "additionalFields": {
-          "summary": "={{ 'Demo Diet System - ' + $json.nome_lead }}",
-          "description": "={{ 'Lead: ' + $json.nome_lead + '\\nTelefone: ' + $json.telefone + '\\nDia: ' + ($json.dia || '') + '\\nHorario: ' + ($json.horario || '') + '\\n\\nAgendado via: SDR Valentina (WhatsApp)' }}",
-          "conferenceDataUi": {
-            "conferenceDataValues": {
-              "createRequest": true
-            }
-          },
-          "reminders": {
-            "remindersUi": {
-              "remindersValues": [
-                {
-                  "method": "email",
-                  "minutes": 60
-                },
-                {
-                  "method": "popup",
-                  "minutes": 30
-                }
-              ]
-            }
-          },
-          "sendUpdates": "all"
-        }
-      },
-      "id": "criar-evento-calendar",
-      "name": "Criar Evento Calendar",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1.2,
-      "position": [4300, 400],
-      "credentials": {
-        "googleCalendarOAuth2Api": {
-          "id": "GOOGLE_CALENDAR_CREDENTIAL_ID",
-          "name": "Google Calendar - Diet System"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extrair link do Google Meet do evento criado\nconst evento = $json;\nconst meetLink = evento.hangoutLink || evento.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri || '';\nconst respostaOriginal = $('Extrair Dados Agendamento').item.json.resposta_original;\n\n// Substituir o placeholder do link pelo link real do Meet\nlet respostaAtualizada = respostaOriginal;\n\n// Remover marcador AGENDAMENTO_CONFIRMADO e dados estruturados\nrespostaAtualizada = respostaAtualizada.replace(/\\*\\*AGENDAMENTO_CONFIRMADO\\*\\*[\\s\\S]*?Horario:[^\\n]*\\n?/i, '');\nrespostaAtualizada = respostaAtualizada.replace(/AGENDAMENTO_CONFIRMADO[\\s\\S]*?Horario:[^\\n]*\\n?/i, '');\n\n// Substituir placeholder do link pelo link real\nif (meetLink) {\n  respostaAtualizada = respostaAtualizada.replace(/🔗 Link:.*$/m, `🔗 Link: ${meetLink}`);\n  respostaAtualizada = respostaAtualizada.replace(/\\[sera enviado automaticamente\\]/gi, meetLink);\n}\n\nreturn [{ json: { Resposta: respostaAtualizada, meetLink: meetLink } }];"
-      },
-      "id": "adicionar-link-meet",
-      "name": "Adicionar Link Meet",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [4500, 400]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Para o caminho sem agendamento, preparar a resposta\nconst respostaOriginal = $json.resposta_original || '';\n\n// Remover marcadores de sistema se houver\nlet respostaLimpa = respostaOriginal\n  .replace(/\\*\\*AGENDAMENTO_CONFIRMADO\\*\\*[\\s\\S]*?Horario:[^\\n]*\\n?/gi, '')\n  .replace(/AGENDAMENTO_CONFIRMADO[\\s\\S]*?Horario:[^\\n]*\\n?/gi, '')\n  .trim();\n\nreturn [{ json: { Resposta: respostaLimpa } }];"
-      },
-      "id": "preparar-resposta-sem-calendar",
-      "name": "Preparar Resposta Sem Calendar",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [4300, 600]
     },
     {
       "parameters": {
@@ -1200,28 +1022,6 @@
       "main": [
         [
           {
-            "node": "Buscar Disponibilidade Calendar",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Buscar Disponibilidade Calendar": {
-      "main": [
-        [
-          {
-            "node": "Processar Disponibilidade",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Processar Disponibilidade": {
-      "main": [
-        [
-          {
             "node": "Valentina",
             "type": "main",
             "index": 0
@@ -1288,73 +1088,11 @@
       "main": [
         [
           {
-            "node": "Extrair Dados Agendamento",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "Parser Chain",
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Extrair Dados Agendamento": {
-      "main": [
-        [
-          {
-            "node": "Agendamento Confirmado?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Agendamento Confirmado?": {
-      "main": [
-        [
-          {
-            "node": "Criar Evento Calendar",
-            "type": "main",
-            "index": 0
-          }
         ],
-        [
-          {
-            "node": "Preparar Resposta Sem Calendar",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Criar Evento Calendar": {
-      "main": [
-        [
-          {
-            "node": "Adicionar Link Meet",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Adicionar Link Meet": {
-      "main": [
-        [
-          {
-            "node": "Parser Chain",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar Resposta Sem Calendar": {
-      "main": [
         [
           {
             "node": "Parser Chain",
